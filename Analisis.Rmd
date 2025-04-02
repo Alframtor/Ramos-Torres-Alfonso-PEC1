@@ -72,7 +72,9 @@ print(colnames(assay_data_t))
 print(rownames(colData))
 ```
 Tras verificar que todo esta correcto, procedemos a construir el objeto SummarizedExperiment, que contendrá tanto la matriz de datos (las mediciones de los metabolitos) como los metadatos de las muestras.
+
 ```{r}
+# Construimos el objeto SummarizedExperiment
 se <- SummarizedExperiment(
   assays = list(counts = assay_data_t),
   colData = colData
@@ -87,3 +89,75 @@ Para guardar el SummarizedExperiment en formato binario (.Rda) utilizamos el com
 save(se, file = "SummarizedExperiment.Rda")
 ```
 
+Procedemos ahora con el análisis exploratorio del dataset. En primer lugar vamos a extraer la matriz de ensayos (las mediciones de los metabolitos) y observar sus estadísticas básicas:
+
+```{r}
+# Extraemos la matriz de datos del objeto SummarizedExperiment
+# Debemos recordar que las filas corresponden con los metabolitos y las columnas
+# con las muestras (los IDs)
+assay_data <- assay(se, "counts")
+
+# Comprobamos las dimensiones de la matriz, que nos dirá el número de metabolitos (filas) y muestras (columnas)
+dim(assay_data)
+
+# Mostramos un resumen general de todos los valores
+summary(assay_data)
+
+```
+
+Para tener una idea general de cómo es la distribución de metabolitos por paciente realizamos un gráfico de boxplot, en el cuál representaremos los valores de las mediciones de metabolitos de cada paciente, observando de esta forma si siguen o no una distribución similar:
+
+```{r}
+# Generamos un gráfico de boxplot
+boxplot(assay_data,
+        outline = FALSE, # Eliminamos la visualización de los valores atípicos para que se pueda observar correctamente el gráfico
+        las = 2, # Giramos las etiquetas para visualizar mejor los nombres
+        main = "Distribución de Intensidades de Metabolitos por Paciente", 
+        ylab = "Intensidad")
+```
+
+A continuación, procedemos con el análisis de componentes principales (PCA):
+
+```{r}
+# Realizamos el Análisis de Componentes Principales
+pca <- prcomp(t(assay_data), scale. = TRUE) # Escalamos los datos
+
+# Generamos un vector para asignar colores según al grupo que pertenezcan
+# El grupo con caquexia tendrá color rojo y el grupo control azul
+group_colors <- ifelse(colData(se)$Muscle.loss == "cachexic", "red", "blue")
+
+# Generamos el gráfico del PCA
+plot(pca$x[, 1:2], # Extraemos las coordenadas de las muestras en los dos 
+                   # componentes principales (PC1 y PC2)
+     col = group_colors, # asignamos los colores a los puntos
+     pch = 19, # Representamos los puntos con un círculo relleno
+     xlab = "PC1",
+     ylab = "PC2",
+     main = "Análisis de Componentes Principales")
+legend("topright",
+       legend = c("cachexic", "control"), # añadimos una leyenda
+       col = c("red", "blue"),
+       pch = 19)
+
+```
+
+Realizamos un "Heatmap" para observar patrones de expresión entre metabolitos:
+```{r}
+
+
+library(ComplexHeatmap)
+
+varianza <- apply(assay_data, 1, var)
+top20_metabolites <- names(sort(varianza, decreasing = TRUE))[1:20]
+
+anotacion_columnas <- data.frame(Grupo = colData(se)$Muscle.loss)
+rownames(anotacion_columnas) <- colnames(assay_data)
+
+pdf("heatmap_grande.pdf", width = 12, height = 10)
+Heatmap(assay_data[top20_metabolites, ],
+        top_annotation = HeatmapAnnotation(df = anotacion_columnas),
+        column_title = "Heatmap Top 20 Metabolitos Más Variables")
+dev.off()
+
+```
+Debido a la dificultad de visualización del heatmap, lo generamos como un pdf para poder visualizarlo mejor.
