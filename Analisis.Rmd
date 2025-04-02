@@ -1,0 +1,89 @@
+---
+title: "Análisis PEC1"
+author: "Alfonso Ramos Torres"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Instalamos y cargamos el paquete "SummarizedExperiment" tal y como nos indica en la página de Bioconductor. A continuación, cargamos el conjunto de datos seleccionado y mostramos las primeras filas del mismo.
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("SummarizedExperiment")
+
+library(SummarizedExperiment)
+
+# Leemos el archivo CSV
+raw_data <- read.csv("human_cachexia.csv")
+head(raw_data)
+```
+
+Como podemos observar, las dos primeras columnas (Patient.ID y Muscle.loss) muestran el identificador único de cada paciente y si pertenecen al grupo control o al grupo que presentan caquexia, mientras que las columnas posteriores muestran las mediciones de los distintos metabolitos. Por tanto, procedemos a extraer las dos primeras columnas (los metadatos), utilizando el ID como etiqueta única para cada fila (como nombre de fila):
+
+```{r}
+# Extraemos los metadatos
+colData <- raw_data[, 1:2]
+
+# Asignamos los ID a los nombres de las filas
+rownames(colData) <- colData[,"Patient.ID"]
+
+# Eliminamos la columna redundante para que no aparezca información duplicada y
+# mantenemos el formato de data frame con la opción "drop = FALSE"
+colData <- colData[, -1, drop = FALSE]
+
+head(colData)
+
+```
+
+Ahora eliminamos las dos primeras columnas para construir una matriz que contenga solo las mediciones de los distintos metabolitos:
+```{r}
+# Extraemos las mediciones de los metabolitos
+assay_data <- as.matrix(raw_data[, -c(1, 2)])
+
+# Comprobamos que hemos extraído correctamente las dos primeras columnas
+dim(raw_data)
+dim(assay_data)
+```
+Por defecto, en un objeto SummarizedExperiment se espera que las filas representen las características (los metabolitos) y las columnas las muestras, por lo que necesitamos transponer nuestros datos:
+```{r}
+# Transponemos la matriz
+assay_data_t <- t(assay_data)
+
+# Asignamos los nombres de las filas a partir de los nombres de los metabolitos
+rownames(assay_data_t) <- colnames(raw_data)[-c(1,2)]
+
+# Asiignamos los nombres de las columnas usando los ID 
+colnames(assay_data_t) <- rownames(colData)
+
+# Verificamos que se muestra todo correctamente
+assay_data_t[1:5, 1:5]
+```
+
+Verificamos que los nombres de las columnas en la matriz transpuesta (los ID de los pacientes) coincidan con los nombres de las filas en "colData", ya que usamos estos IDs para etiquetar las muestras:
+```{r}
+# Mostramos los nombres de las columnas en assay_data_t
+print(colnames(assay_data_t))
+
+# Mostramos los nombres de las filas de colData
+print(rownames(colData))
+```
+Tras verificar que todo esta correcto, procedemos a construir el objeto SummarizedExperiment, que contendrá tanto la matriz de datos (las mediciones de los metabolitos) como los metadatos de las muestras.
+```{r}
+se <- SummarizedExperiment(
+  assays = list(counts = assay_data_t),
+  colData = colData
+)
+
+# Mostramos la estructura del SummarizedExperiment
+se
+```
+Para guardar el SummarizedExperiment en formato binario (.Rda) utilizamos el comando "save()" para generar un archivo con dicha extensión:
+```{r}
+# Generamos el archivo .Rda
+save(se, file = "SummarizedExperiment.Rda")
+```
+
